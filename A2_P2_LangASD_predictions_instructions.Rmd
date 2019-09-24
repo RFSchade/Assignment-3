@@ -105,23 +105,29 @@ CleanUpData <- function(Demo,LU,Word){
 # Loading the output dataset from the data cleaning assignment
 data <- read.csv("dataset.csv")
 
-# Loading the input datasets from the data cleaning assignment to run it through Ricardo's code because I am too lazy to make my own fucktion at the moment. 
+# Loading the input datasets from the data cleaning assignment to run it through Ricardo's code because I am too lazy to make my own fucktion at the moment.
 lu <- read.csv("LU_test.csv")
 demo <- read.csv("demo_test.csv")
 token <- read.csv("token_test.csv")
 
-# Loading thetest datasets so I can run them through Ricardo's functipon --||-- 
-data <- read.csv("dataset.csv")
-data <- read.csv("dataset.csv")
-data <- read.csv("dataset.csv")
+# Loading the test datasets so I can run them through Ricardo's functipon --||-- 
+lu2 <- read.csv("LU_test2.csv")
+demo2 <- read.csv("demo_test2.csv")
+token2 <- read.csv("token_test2.csv")
 
-#- recreate the models you chose last time (just write the code again and apply it to Train Data)
+#-----> recreate the models you chose last time (just write the code again and apply it to Train Data)
 m1 <- lmer(CHI_MLU ~ VISIT * Diagnosis + ExpressiveLangRaw1 + MOT_MLU + (1|SUBJ) + (0+VISIT|SUBJ), data)
+summary(m1)
+
 # lmercontrol
 # check.nobs.vs.nre = "ignore"
-#- calculate performance of the model on the training data: root mean square error is a good measure. (Tip: google the function rmse())
 
-
+#-----> calculate performance of the model on the training data: root mean square error is a good measure. (Tip: google the function rmse())
+# Seeing predictions on the trainig set?
+predictions <- predict(m1, data)
+# Calculating RMSE
+rmse(data$CHI_MLU, predictions)
+# Apperently the Root mean square error of the model is 0.3509159 - I don't really know how to interpret this. 
 
 #- create the test dataset (apply the code from assignment 1 or my function to clean up the 3 test datasets)
 # Test data
