@@ -9,7 +9,7 @@ output:
 
 ```{r setup, include=FALSE}
 # loading all the important pckages here
-pacman::p_load(readr,dplyr,stringr,lmerTest,Metrics,caret,knitr,tidyverse)
+pacman::p_load(readr,dplyr,stringr,lmerTest,Metrics,caret,knitr,tidyverse,DrugClust)
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
@@ -96,6 +96,9 @@ CleanUpData <- function(Demo,LU,Word){
          "A"  = "TD",
          "B"  = "ASD")
     )
+  
+  # added to the function to get rid of the NAs
+  Data <- subset(Data, !is.na(CHI_MLU))
 
   return(Data)
 }
@@ -106,17 +109,15 @@ CleanUpData <- function(Demo,LU,Word){
 data <- read.csv("dataset.csv")
 
 # Loading the input datasets from the data cleaning assignment to run it through Ricardo's code because I am too lazy to make my own fucktion at the moment.
-lu <- read.csv("LU_test.csv")
-demo <- read.csv("demo_test.csv")
-token <- read.csv("token_test.csv")
+lu <- read.csv("LU_train.csv")
+demo <- read.csv("demo_train.csv")
+token <- read.csv("token_train.csv")
 
-# Loading the test datasets so I can run them through Ricardo's functipon --||-- 
-lu2 <- read.csv("LU_test2.csv")
-demo2 <- read.csv("demo_test2.csv")
-token2 <- read.csv("token_test2.csv")
+# Feeding the data through Ricardo's function
+train <- CleanUpData(demo, lu, token)
 
 #-----> recreate the models you chose last time (just write the code again and apply it to Train Data)
-m1 <- lmer(CHI_MLU ~ VISIT * Diagnosis + ExpressiveLangRaw1 + MOT_MLU + (1|SUBJ) + (0+VISIT|SUBJ), data)
+m1 <- lmer(CHI_MLU ~ Visit * Diagnosis + verbalIQ1 + MOT_MLU + (1|Child.ID) + (0+Visit|Child.ID), train)
 summary(m1)
 
 # lmercontrol
@@ -124,18 +125,29 @@ summary(m1)
 
 #-----> calculate performance of the model on the training data: root mean square error is a good measure. (Tip: google the function rmse())
 # Seeing predictions on the trainig set?
-predictions <- predict(m1, data)
+predictions <- predict(m1, train)
 # Calculating RMSE
-rmse(data$CHI_MLU, predictions)
-# Apperently the Root mean square error of the model is 0.3509159 - I don't really know how to interpret this. 
+rmse(train$CHI_MLU, predictions)
+# Apperently the Root mean square error of the model is 0.3509159 - I don't really know how to interpret this. (find out)
 
-#- create the test dataset (apply the code from assignment 1 or my function to clean up the 3 test datasets)
-# Test data
+#-----> create the test dataset (apply the code from assignment 1 or my function to clean up the 3 test datasets)
 
-#- test the performance of the models on the test data (Tips: google the functions "predict()")
+# Loading the test datasets so I can run them through Ricardo's functipon --||-- 
+lu2 <- read.csv("LU_test.csv")
+demo2 <- read.csv("demo_test.csv")
+token2 <- read.csv("token_test.csv")
 
+# Feeding the data through Ricardo's function
+test <- CleanUpData(demo2, lu2, token2)
 
-#- optional: predictions are never certain, can you identify the uncertainty of the predictions? (e.g. google predictinterval())
+#-----> test the performance of the models on the test data (Tips: google the functions "predict()")
+# Seeing predictions on the test set?
+predictions_test <- predict(m1, test)
+# Calculating RMSE
+rmse(test$CHI_MLU, predictions_test)
+# Apperently the Root mean square error of the model is 0.4933858 - I don't really know how to interpret this. (find out)
+
+#-----> optional: predictions are never certain, can you identify the uncertainty of the predictions? (e.g. google predictinterval())
 
 ```
 
@@ -158,14 +170,59 @@ In this exercise you have to use cross-validation to calculate the predictive er
 
 
 ```{r}
-#- Create the basic model of ChildMLU as a function of Time and Diagnosis (don't forget the random effects!).
+#-----> Create the basic model of ChildMLU as a function of Time and Diagnosis (don't forget the random effects!).
+# Copy-pasting the model from part 1 of the assignment:
+m2 <- lmer(CHI_MLU ~ Visit * Diagnosis + (1|Child.ID) + (0+Visit|Child.ID), train)
+summary(m2)
 
-#- Make a cross-validated version of the model. (Tips: google the function "createFolds";  loop through each fold, train a model on the other folds and test it on the fold)
+#-----> Make a cross-validated version of the model. (Tips: google the function "createFolds" (BAH! HUMBUG!);  loop through each fold, train a model on the other folds and test it on the fold)
 
-#- Report the results and comment on them. 
+# Loading conveinient package
+p_load(groupdata2)
 
-#- Now try to find the best possible predictive model of ChildMLU, that is, the one that produces the best cross-validated results.
+# Folding the data
+fold_train <- fold(train, k = 5, cat_col = "Diagnosis", id_col = "Child.ID") %>% arrange(.folds)
 
+# Wrining a csv so I can reliable re-load the folding
+write.csv(fold_train, file="folded.csv")
+
+# Loading csv
+folded <- read.csv("folded.csv")
+
+# Making empthy vector
+RMSE <- data.frame(1:5, numeric(5))
+
+# Making a for-loop
+for(i in 1:5) {
+  loop_test <- folded %>% filter(.folds == i)
+  loop_train <- folded %>% filter(.folds != i)
+  # Training mdl
+  fold_mdl <- lmer(CHI_MLU ~ Visit * Diagnosis + (1|Child.ID) + (0+Visit|Child.ID), folded)
+  # Predicting stuff
+  pre_loop <- predict(m1, loop_train)
+  # Calculating RMSE
+  RMSE[i,2] <- rmse(loop_train$CHI_MLU, pre_loop)
+}
+# allow new levels = True?
+
+#-----> Report the results and comment on them. 
+# (Reporting...)
+
+#-----> Now try to find the best possible predictive model of ChildMLU, that is, the one that produces the best cross-validated results.
+# > Switch variables around in the for loop
+# Making empthy vector
+RMSE2 <- data.frame(1:5, numeric(5))
+# loop
+for(i in 1:5) {
+  loop_test2 <- folded %>% filter(.folds == i)
+  loop_train2 <- folded %>% filter(.folds != i)
+  # Training mdl
+  fold_mdl2 <- lmer(CHI_MLU ~ Visit * Diagnosis + (1|Child.ID) + (0+Visit|Child.ID), folded)
+  # Predicting stuff
+  pre_loop2 <- predict(m1, loop_train)
+  # Calculating RMSE
+  RMSE2[i,2] <- rmse(loop_train$CHI_MLU, pre_loop)
+}
 # Bonus Question 1: What is the effect of changing the number of folds? Can you plot RMSE as a function of number of folds?
 # Bonus Question 2: compare the cross-validated predictive error against the actual predictive error on the test data
 ```
@@ -185,7 +242,31 @@ You want to evaluate:
 - how does the child fare compared to the model predictions at Visit 6? Is the child below or above expectations? (tip: use the predict() function on Bernie's data only and compare the prediction with the actual performance of the child)
 
 ```{r}
+#-----> Making dataframes
+# Only Bernie
+# > Eyeballing the code and the dataframe, it is determined that Bernie is subject 2
+bernie <- test %>% filter(Child.ID == 2)
 
+# All the TD children - presumable only from the training dataset, but I don't know anyhting. 
+TD <- train %>% filter(Diagnosis == "TD")
+
+#-----> Absolute distance between Bernie and the average TD child
+# Making the TD dataframe more specific
+TD <- TD %>% select(Child.ID, Visit, CHI_MLU)
+# getting a dataframe with all the mean values
+mean <- TD %>% group_by(Visit) %>% dplyr::summarise(mean_MLU=mean(CHI_MLU))
+# Adding mean MLU to Bernie's dataframe 
+bernie$Mean_MLU <- mean$mean_MLU
+# Adding the absolute difference to Bernie's dataframe
+bernie$diff <- bernie$CHI_MLU - bernie$Mean_MLU
+# > Bernie is doing consistanly better over-all
+
+#-----> Predictions
+# Prediction Bernie
+be_pre <- predict(m1, bernie)
+# Calculating RMSE
+rmse(bernie$CHI_MLU, be_pre)
+# > The RMSE is 0.3474522, but I am still not sure how to interpret it 
 ```
 
 
